@@ -32,25 +32,26 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 
 public class MainActivity extends AppCompatActivity {
+    String selectedItem;
     TextView tv;
     ListView lv;
     DatePicker dp;
     ArrayList<String> data;
-    ArrayList<diary> data2;
     ArrayAdapter<String> adapter;
     LinearLayout linear1,linear2;
+    Button btSave;
     EditText et;
-    int count = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         init();
-        checkPer();
-        makeDir();
 
         lv.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
             @Override
@@ -65,8 +66,8 @@ public class MainActivity extends AppCompatActivity {
                                 File file = new File(getExternalPath() + "mydiary/" + data.get(i) + ".txt");
                                 file.delete();
                                 data.remove(i);
-                                data2.remove(i);
                                 adapter.notifyDataSetChanged();
+                                listFile();
                                 Toast.makeText(getApplicationContext(),"삭제되었습니다",Toast.LENGTH_SHORT).show();
                             }
                         })
@@ -74,7 +75,16 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
         });
-
+        lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                selectedItem = data.get(i).substring(0,9);
+                readFile(selectedItem);
+                btSave.setText("수정");
+                linear1.setVisibility(View.INVISIBLE);
+                linear2.setVisibility(View.VISIBLE);
+            }
+        });
 
     }
 
@@ -82,13 +92,16 @@ public class MainActivity extends AppCompatActivity {
         tv = (TextView)findViewById(R.id.tvCount);
         lv = (ListView)findViewById(R.id.listview);
         data = new ArrayList<String>();
-        data2 = new ArrayList<diary>();
         linear1 = (LinearLayout)findViewById(R.id.linear1);
         linear2 = (LinearLayout)findViewById(R.id.linear2);
         dp = (DatePicker)findViewById(R.id.dp);
         et = (EditText)findViewById(R.id.et);
+        btSave = (Button)findViewById(R.id.btnsave);
         adapter = new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,data);
         lv.setAdapter(adapter);
+        checkPer();
+        makeDir();
+        listFile();
     }
 
 
@@ -121,39 +134,33 @@ public class MainActivity extends AppCompatActivity {
     private void makeDir() {//외부 메모리에 디렉토리 만들기
         String path = getExternalPath();
         File file = new File(path + "mydiary");
-        Toast.makeText(this,"디렉토리 생성",Toast.LENGTH_SHORT).show();
         file.mkdir();
+        Toast.makeText(this,"디렉토리 생성",Toast.LENGTH_SHORT).show();
     }
 
     public void writeFile(String filename){
         try {
-            String path =getExternalPath();
+            String path = getExternalPath();
             BufferedWriter bw = new BufferedWriter(new FileWriter(path + "mydiary/" + filename+ ".txt", true));
             bw.write(et.getText().toString());
             bw.close();
-            data.add(filename);
-            data2.add(new diary(path + filename+".txt", filename));
-            adapter.notifyDataSetChanged();
+            fileList();
             Toast.makeText(this, "저장완료", Toast.LENGTH_SHORT).show();
-            count++;
-            tv.setText("등록된 메모 개수: "+count);
         } catch (IOException e) {
             e.printStackTrace();
             Toast.makeText(this, e.getMessage() + ":" + getFilesDir(),
                     Toast.LENGTH_SHORT).show();
         }
     }
-    public void readFile() {
+    public void readFile(String filename) {
         try {
             String path =getExternalPath();
-            BufferedReader br = new BufferedReader(new
-                    FileReader(path + "aaa.txt"));
+            BufferedReader br = new BufferedReader(new FileReader(path+ "mydiary/" + filename + ".txt"));
             String readStr = "";
             String str = null;
             while ((str = br.readLine()) != null) readStr += str + "\n";
             br.close();
-            Toast.makeText(this, readStr.substring(0, readStr.length() - 1),
-                    Toast.LENGTH_SHORT).show();
+            et.setText(readStr);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
             Toast.makeText(this, "File not found",
@@ -165,22 +172,86 @@ public class MainActivity extends AppCompatActivity {
 
     public void onClick(View view){
 
-        if(view.getId() == R.id.btn1){
+        if(view.getId() == R.id.btn1){//일기 등록 시(화면 변경)
             linear1.setVisibility(View.INVISIBLE);
             linear2.setVisibility(View.VISIBLE);
+            btSave.setText("저장");
+            et.setText(null);
         }
-        else if(view.getId() == R.id.btncancel){
-
-        }
-        else if(view.getId() == R.id.btnsave){
-            Calendar cal  = Calendar.getInstance();
-            int year = cal.get(Calendar.YEAR);
-            int month = cal.get(Calendar.MONTH);
-            int day = cal.get(Calendar.DAY_OF_MONTH);
-            writeFile(getNameFromDP());
-            dp.init(year,month,day,null);
+        else if(view.getId() == R.id.btncancel){//취소 시(화면 변경)
             linear2.setVisibility(View.INVISIBLE);
             linear1.setVisibility(View.VISIBLE);
         }
+        else if(view.getId() == R.id.btnsave){//저장 OR 수정
+            if(btSave.getText().equals("저장")){//저장
+                if(checkList(getNameFromDP())){ //원래 리스트에 해당 날짜 존재하는지 아닌지
+                    linear1.setVisibility(View.GONE);
+                    linear2.setVisibility(View.VISIBLE);
+                    Toast.makeText(getApplicationContext(),"이미 존재합니다",Toast.LENGTH_SHORT).show();
+                    readFile(getNameFromDP());
+                    initDP();
+                    btSave.setText("수정");
+                    return;
+                }
+                else{
+                    writeFile(getNameFromDP());
+                }
+            }
+            else if(btSave.getText().equals("수정")){
+                File file = new File(getExternalPath() + "mydiary/" + selectedItem + ".txt");
+                file.delete();
+                writeFile(getNameFromDP());
+                initDP();
+                btSave.setText("저장");
+            }
+            listFile();
+            linear2.setVisibility(View.INVISIBLE);
+            linear1.setVisibility(View.VISIBLE);
+            et.setText(null);
+        }
     }
+
+    private boolean checkList(String nameFromDP) {
+        boolean check = false;
+        for(int i = 0; i < data.size(); i++){
+            if(data.get(i).equals(nameFromDP)) check = true;
+        }
+        return check;
+    }
+
+    private void listFile(){
+        String path = getExternalPath();
+        data.clear();
+        File[] files = new File(path + "mydiary").listFiles();
+        String str = "";
+        if(files != null){
+            for(File f:files){
+                str = f.getName().substring(0,9);
+                data.add(str);
+            }
+        }
+        Collections.sort(data,comparator);
+        adapter.notifyDataSetChanged();
+        tv.setText("등록된 메모 개수: " + data.size());
+    }
+
+    Comparator<String> comparator = new Comparator<String>() {
+        @Override
+        public int compare(String s, String t1) {
+            return s.compareTo(t1);
+        }
+    };
+    public void sorting(){
+        Collections.sort(data,comparator);
+    }
+
+    private void initDP(){
+        Calendar cal  = Calendar.getInstance();
+        int year = cal.get(Calendar.YEAR);
+        int month = cal.get(Calendar.MONTH);
+        int day = cal.get(Calendar.DAY_OF_MONTH);
+        dp.init(year,month,day,null);
+    }
+
+
 }
